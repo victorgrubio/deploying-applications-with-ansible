@@ -1,0 +1,153 @@
+# This is a 'list of tasks' playbook that deploys a 'hello world' web
+# application written in Flask. Several tasks have been filled in
+# for you, but others are incomplete. Fill in the remainder of the
+# tasks and make sure that you can run the playbook (from ~/ansible):
+#
+#   ansible-playbook playbooks/1.6_webapp.yml
+#
+# Each of the tasks points you to an Ansible module you could use to
+# complete it, though there are often multiple correct answers. You
+# can read up on specific Ansible modules here:
+#
+#   http://docs.ansible.com/ansible/list_of_all_modules.html
+#
+# If you get stuck, you can check out 1.6_webapp_example.yml for a completed
+# version of this playbook.
+
+# This will deploy a web app locally rather than to another server.
+- name: Deploy a web application
+  hosts: control_machine
+
+  # Values we're using in more than one place are best
+  # stored as variables. Playbooks are one of the many
+  # locations we can define variables.
+  vars:
+    deploy_directory: ~/apps
+    nginx_listen_port: 80
+    nginx_upstream_port: 5000
+
+  tasks:
+    # Flask is a Python web server, installed as a
+    # Python package. Check out the `pip` module - and
+    # remember, we need to run it as root.
+    - name: Install flask
+      fail: msg='Unimplemented task!'
+      ignore_errors: yes
+
+    # We can create directories with the `file` module. Make
+    # sure to use the deploy_directory variable!
+    - name: Create the deploy directory if it doesn't exist.
+      fail: msg='Unimplemented task!'
+      ignore_errors: yes
+
+    # This repository ships with 'files/hello_world/hello_world.py',
+    # a simple Flask application. Copy it to the deploy directory
+    # with the `copy` module.
+    - name: Deploy flask app
+      fail: msg='Unimplemented task!'
+      ignore_errors: yes
+
+    # Normally, we'd deploy Flask with a process
+    # manager like supervisor. To keep this example
+    # basic, we'll just run it as a backgrounded
+    # process for now.
+
+    # To ensure playbook idempotency (ability to safely re-run),
+    # we need to kill existing Flask processes before starting
+    # a new one. Otherwise we'd fail to bind to the right port.
+    - name: Kill all running flask processes.
+      shell: pkill -e flask
+      # pkill returns 1 when it doesn't find a process to kill.
+      # Setting `failed_when` to false will prevent that from
+      # being treated as a failure.
+      failed_when: false
+      # `shell` tasks aren't necessarily idempotent, so they'll always
+      # show as 'changed' in Ansible output. Setting `changed_when`
+      # lets us define what is considered to be a state change.
+      register: pkill
+      changed_when: "'killed' in pkill.stdout"
+
+    - name: Start flask as a backgrounded process
+      # We can set environment variables for a task to be run with.
+      environment:
+        FLASK_APP: "{{deploy_directory|expanduser}}/hello_world.py"
+      # When we run Flask, it attaches to our terminal. When we run
+      # a shell command with Ansible, it operates much like it would
+      # if we ran it as our user, so this task wouldn't complete
+      # until the Flask process died. We can use the `nohup` command
+      # and the `&` operator to
+      # run Flask as a backgrounded, unattached process.
+      shell: "nohup flask run -p {{nginx_upstream_port}} &"
+      # We do still get stderr before the process returns, and we can
+      # inspect that for an error message.
+      register: flask
+      # This is a form of YAML multiline syntax.
+      failed_when: >
+        'does not appear to exist' in flask.stderr
+        or 'Traceback' in flask.stderr
+
+    # Install the packaged version of nginx with the `apt` module.
+    # Like other package managers, we'll want to run this command as
+    # root by using `become: yes`.
+    - name: Install nginx
+      fail: msg='Unimplemented task!'
+      ignore_errors: yes
+
+    # (We'll need to be root for the following nginx tasks, too!)
+
+    # Use the `template` module to template the configuration file
+    # from `templates/proxy.j2` to `/etc/nginx/sites-available`. 
+    - name: Template nginx configuration file
+      fail: msg='Unimplemented task!'
+      ignore_errors: yes
+
+    # nginx loads configuration files from `/etc/nginx/sites-enabled`,
+    # which are traditionally symlinks to files in
+    # `/etc/nginx/sites-available`. Use the `file` module to delete
+    # all symlinks so that nginx is only serving this Flask app.
+    # (HINT: Try out `with_fileglob: /etc/nginx/sites-enabled/*`)
+    - name: Disable all nginx sites
+      fail: msg='Unimplemented task!'
+      ignore_errors: yes
+
+    # Create a symlink in `/etc/nginx/sites-enabled` pointing to the
+    # file we previously templated into `/etc/nginx/sites-available`.
+    - name: Enable this site
+      fail: msg='Unimplemented task!'
+      ignore_errors: yes
+
+    # The nginx package installs it as a service, so we can use the
+    # `service` or `systemd` commands to manage it.
+    - name: Reload nginx configuration
+      fail: msg='Unimplemented task!'
+      ignore_errors: yes
+
+    # Ansible commands process much faster than manual execution, so
+    # it's possible that nginx won't have bound to port 80 before we
+    # attempt to query the server.
+    - name: Wait for nginx to listen on port {{nginx_listen_port}}
+      wait_for:
+        port: "{{nginx_listen_port}}"
+        # wait_for starts immediately and polls every second, but if
+        # nginx hasn't started in 10 seconds, something is wrong.
+        timeout: 10
+
+    # The `uri` module is a basic HTTP client that is primarily for
+    # checking status codes, but can also save response bodies.
+    - name: Ensure that the proxy is functioning
+      uri:
+        url: http://localhost:{{nginx_listen_port}}
+        return_content: yes
+      # `register` saves the output to an Ansible variable.
+      register: proxy_response
+      # Mark the task as failed, but run the next task.
+      failed_when: "'Deploying Applications With Ansible' not in proxy_response.content"
+      ignore_errors: true
+
+    # The `fail` module will stop a playbook with an error. The `when`
+    # section will prevent the `fail` module from executing if the
+    # condition evaluates to true. 
+    - name: Make sure we're in the right class!
+      debug:
+        msg: "Application {% if proxy_response.failed %}failed to deploy.{% else %}successfully deployed!{% endif %}"
+      failed_when: proxy_response.failed
